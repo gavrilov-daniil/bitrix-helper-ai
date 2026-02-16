@@ -6,6 +6,8 @@ RUN apk add --no-cache \
     icu-dev \
     oniguruma-dev \
     curl-dev \
+    linux-headers \
+    $PHPIZE_DEPS \
     && docker-php-ext-install \
     pdo \
     pdo_pgsql \
@@ -14,7 +16,10 @@ RUN apk add --no-cache \
     mbstring \
     bcmath \
     opcache \
-    curl
+    curl \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del $PHPIZE_DEPS linux-headers
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 

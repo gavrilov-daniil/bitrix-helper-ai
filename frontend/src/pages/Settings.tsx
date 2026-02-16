@@ -26,6 +26,7 @@ export default function Settings() {
     mutationFn: createConnection,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-status'] })
       navigate('/')
     },
   })
@@ -35,6 +36,7 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
       queryClient.invalidateQueries({ queryKey: ['connection', id] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-status'] })
       navigate('/')
     },
   })
@@ -43,6 +45,7 @@ export default function Settings() {
     mutationFn: () => deleteConnection(Number(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-status'] })
       navigate('/')
     },
   })
@@ -79,7 +82,7 @@ export default function Settings() {
         <p className="mt-1 text-sm text-gray-500">
           {isEdit
             ? 'Update your Bitrix24 connection settings.'
-            : 'Add a new Bitrix24 connection. You will need a webhook from your Bitrix24 admin panel.'}
+            : 'Add a new Bitrix24 connection. You can use a webhook or OAuth 2.0.'}
         </p>
       </div>
 
@@ -91,6 +94,7 @@ export default function Settings() {
                   name: connection.name,
                   domain: connection.domain,
                   bitrix_user_id: connection.bitrix_user_id,
+                  auth_type: connection.auth_type,
                 }
               : undefined
           }
@@ -98,6 +102,8 @@ export default function Settings() {
           onTest={isEdit ? handleTest : undefined}
           isEdit={isEdit}
           isLoading={createMutation.isPending || updateMutation.isPending}
+          oauthConnected={connection?.oauth_connected}
+          connectionId={connection?.id}
         />
       </div>
 

@@ -44,9 +44,12 @@ class BitrixConnectionController extends Controller
     {
         $data = $request->validated();
 
-        // Don't overwrite webhook_code if not provided
+        // Don't overwrite secrets if not provided
         if (empty($data['webhook_code'])) {
             unset($data['webhook_code']);
+        }
+        if (empty($data['client_secret'])) {
+            unset($data['client_secret']);
         }
 
         $connection->update($data);
@@ -96,12 +99,14 @@ class BitrixConnectionController extends Controller
             'name' => $connection->name,
             'domain' => $connection->domain,
             'bitrix_user_id' => $connection->bitrix_user_id,
+            'auth_type' => $connection->auth_type?->value ?? 'webhook',
             'is_active' => $connection->is_active,
             'last_status' => $connection->last_status?->value ?? 'disconnected',
             'last_checked_at' => $connection->last_checked_at?->toISOString(),
             'server_time' => $connection->server_time,
             'available_scopes' => $connection->available_scopes,
             'error_message' => $connection->error_message,
+            'oauth_connected' => $connection->isOAuth() && $connection->access_token !== null,
             'created_at' => $connection->created_at?->toISOString(),
             'updated_at' => $connection->updated_at?->toISOString(),
         ];

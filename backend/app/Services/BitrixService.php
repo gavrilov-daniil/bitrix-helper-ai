@@ -10,15 +10,24 @@ use Illuminate\Support\Facades\Log;
 
 class BitrixService
 {
+    public function __construct(
+        private readonly BitrixOAuthService $oauthService,
+    ) {}
+
     public function testConnection(BitrixConnection $connection): array
     {
-        $baseUrl = $this->buildWebhookUrl($connection);
         $timeout = config('bitrix.timeout', 10);
 
         try {
+            $baseUrl = $this->getApiBaseUrl($connection);
+            $headers = $this->getAuthHeaders($connection);
+
             // Step 1: Check server availability via server.time
-            $timeResponse = Http::timeout($timeout)
-                ->get($baseUrl . 'server.time.json');
+            $request = Http::timeout($timeout);
+            if (! empty($headers)) {
+                $request = $request->withHeaders($headers);
+            }
+            $timeResponse = $request->get($baseUrl . 'server.time.json');
 
             if (!$timeResponse->successful()) {
                 return $this->handleError($connection, $timeResponse);
@@ -28,8 +37,11 @@ class BitrixService
             $serverTime = $timeData['result'] ?? null;
 
             // Step 2: Check available scopes
-            $scopeResponse = Http::timeout($timeout)
-                ->get($baseUrl . 'scope.json');
+            $request = Http::timeout($timeout);
+            if (! empty($headers)) {
+                $request = $request->withHeaders($headers);
+            }
+            $scopeResponse = $request->get($baseUrl . 'scope.json');
 
             $scopes = [];
             if ($scopeResponse->successful()) {
@@ -67,14 +79,37 @@ class BitrixService
         }
     }
 
-    public function buildWebhookUrl(BitrixConnection $connection): string
+    public function getApiBaseUrl(BitrixConnection $connection): string
     {
         $domain = rtrim($connection->domain, '/');
         if (!str_starts_with($domain, 'http')) {
             $domain = 'https://' . $domain;
         }
 
+        if ($connection->isOAuth()) {
+            // For OAuth, auto-refresh if token is expired
+            if ($this->oauthService->isTokenExpired($connection)) {
+                $this->oauthService->refreshToken($connection);
+                $connection->refresh();
+            }
+            return "{$domain}/rest/";
+        }
+
         return "{$domain}/rest/{$connection->bitrix_user_id}/{$connection->webhook_code}/";
+    }
+
+    public function getAuthHeaders(BitrixConnection $connection): array
+    {
+        if ($connection->isOAuth() && $connection->access_token) {
+            return ['Authorization' => 'Bearer ' . $connection->access_token];
+        }
+
+        return [];
+    }
+
+    public function buildWebhookUrl(BitrixConnection $connection): string
+    {
+        return $this->getApiBaseUrl($connection);
     }
 
     private function handleError(BitrixConnection $connection, $response): array
@@ -90,6 +125,7 @@ class BitrixService
             'INVALID_CREDENTIALS' => 'Invalid credentials: user lacks permissions.',
             'ACCESS_DENIED' => 'Access denied: REST API may not be available.',
             'QUERY_LIMIT_EXCEEDED' => 'Rate limit exceeded. Please try again later.',
+            'expired_token' => 'OAuth token expired. Please re-authorize.',
             default => "Bitrix24 error ({$statusCode}): {$errorDescription}",
         };
 

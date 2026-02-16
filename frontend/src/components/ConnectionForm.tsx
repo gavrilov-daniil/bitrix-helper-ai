@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ConnectionFormData, ConnectionTestResult } from '../types'
+import type { ConnectionFormData, ConnectionTestResult, BitrixAuthType } from '../types'
 
 interface Props {
   initialData?: Partial<ConnectionFormData>
@@ -7,21 +7,26 @@ interface Props {
   onTest?: (data: ConnectionFormData) => Promise<ConnectionTestResult>
   isEdit?: boolean
   isLoading?: boolean
+  oauthConnected?: boolean
+  connectionId?: number
 }
 
-export default function ConnectionForm({ initialData, onSubmit, onTest, isEdit, isLoading }: Props) {
+export default function ConnectionForm({ initialData, onSubmit, onTest, isEdit, isLoading, oauthConnected, connectionId }: Props) {
   const [form, setForm] = useState<ConnectionFormData>({
     name: initialData?.name ?? '',
     domain: initialData?.domain ?? '',
     bitrix_user_id: initialData?.bitrix_user_id ?? 1,
     webhook_code: '',
+    auth_type: initialData?.auth_type ?? 'webhook',
+    client_id: initialData?.client_id ?? '',
+    client_secret: '',
   })
 
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
   const [testing, setTesting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target
     setForm((prev) => ({
       ...prev,
@@ -35,7 +40,14 @@ export default function ConnectionForm({ initialData, onSubmit, onTest, isEdit, 
     if (!form.name.trim()) newErrors.name = 'Name is required'
     if (!form.domain.trim()) newErrors.domain = 'Domain is required'
     if (!form.bitrix_user_id || form.bitrix_user_id < 1) newErrors.bitrix_user_id = 'User ID must be >= 1'
-    if (!isEdit && !form.webhook_code.trim()) newErrors.webhook_code = 'Webhook code is required'
+
+    if (form.auth_type === 'webhook') {
+      if (!isEdit && !form.webhook_code.trim()) newErrors.webhook_code = 'Webhook code is required'
+    } else {
+      if (!form.client_id?.trim()) newErrors.client_id = 'Client ID is required'
+      if (!isEdit && !form.client_secret?.trim()) newErrors.client_secret = 'Client Secret is required'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -116,21 +128,107 @@ export default function ConnectionForm({ initialData, onSubmit, onTest, isEdit, 
         {errors.bitrix_user_id && <p className="mt-1 text-xs text-red-600">{errors.bitrix_user_id}</p>}
       </div>
 
+      {/* Auth Type Selector */}
       <div>
-        <label htmlFor="webhook_code" className="block text-sm font-medium text-gray-700">
-          Webhook Code {isEdit && <span className="text-gray-400">(leave empty to keep current)</span>}
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Authentication Method
         </label>
-        <input
-          id="webhook_code"
-          name="webhook_code"
-          type="password"
-          value={form.webhook_code}
-          onChange={handleChange}
-          placeholder={isEdit ? '********' : 'Enter webhook secret code'}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border px-3 py-2"
-        />
-        {errors.webhook_code && <p className="mt-1 text-xs text-red-600">{errors.webhook_code}</p>}
+        <div className="flex gap-4">
+          {(['webhook', 'oauth'] as BitrixAuthType[]).map((type) => (
+            <label key={type} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="auth_type"
+                value={type}
+                checked={form.auth_type === type}
+                onChange={handleChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                {type === 'webhook' ? 'Webhook' : 'OAuth 2.0'}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
+
+      {/* Webhook Fields */}
+      {form.auth_type === 'webhook' && (
+        <div>
+          <label htmlFor="webhook_code" className="block text-sm font-medium text-gray-700">
+            Webhook Code {isEdit && <span className="text-gray-400">(leave empty to keep current)</span>}
+          </label>
+          <input
+            id="webhook_code"
+            name="webhook_code"
+            type="password"
+            value={form.webhook_code}
+            onChange={handleChange}
+            placeholder={isEdit ? '********' : 'Enter webhook secret code'}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border px-3 py-2"
+          />
+          {errors.webhook_code && <p className="mt-1 text-xs text-red-600">{errors.webhook_code}</p>}
+        </div>
+      )}
+
+      {/* OAuth Fields */}
+      {form.auth_type === 'oauth' && (
+        <>
+          <div>
+            <label htmlFor="client_id" className="block text-sm font-medium text-gray-700">
+              OAuth Client ID
+            </label>
+            <input
+              id="client_id"
+              name="client_id"
+              type="text"
+              value={form.client_id ?? ''}
+              onChange={handleChange}
+              placeholder="app.xxxxxxxx.xxxxxxxx"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border px-3 py-2"
+            />
+            {errors.client_id && <p className="mt-1 text-xs text-red-600">{errors.client_id}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="client_secret" className="block text-sm font-medium text-gray-700">
+              OAuth Client Secret {isEdit && <span className="text-gray-400">(leave empty to keep current)</span>}
+            </label>
+            <input
+              id="client_secret"
+              name="client_secret"
+              type="password"
+              value={form.client_secret ?? ''}
+              onChange={handleChange}
+              placeholder={isEdit ? '********' : 'Enter client secret'}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border px-3 py-2"
+            />
+            {errors.client_secret && <p className="mt-1 text-xs text-red-600">{errors.client_secret}</p>}
+          </div>
+
+          {isEdit && connectionId && (
+            <div className={`rounded-md p-4 ${oauthConnected ? 'bg-green-50' : 'bg-yellow-50'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium ${oauthConnected ? 'text-green-800' : 'text-yellow-800'}`}>
+                    {oauthConnected
+                      ? 'OAuth connected. Tokens are active.'
+                      : 'OAuth not yet authorized. Click "Authorize" to connect.'}
+                  </p>
+                </div>
+                {!oauthConnected && (
+                  <a
+                    href={`/api/bitrix/oauth/initiate/${connectionId}`}
+                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+                  >
+                    Authorize
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {testResult && (
         <div className={`rounded-md p-4 ${testResult.status === 'connected' ? 'bg-green-50' : 'bg-red-50'}`}>
