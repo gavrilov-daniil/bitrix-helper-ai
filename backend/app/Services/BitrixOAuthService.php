@@ -37,12 +37,11 @@ class BitrixOAuthService
         }
 
         try {
-            $response = Http::timeout(10)->post("{$domain}/oauth/token/", [
+            $response = Http::timeout(10)->get('https://oauth.bitrix.info/oauth/token/', [
                 'grant_type' => 'authorization_code',
                 'client_id' => $connection->client_id,
                 'client_secret' => $connection->client_secret,
                 'code' => $code,
-                'redirect_uri' => config('bitrix.oauth_redirect_uri'),
             ]);
 
             if (! $response->successful()) {
@@ -54,9 +53,24 @@ class BitrixOAuthService
             }
 
             $data = $response->json();
+
+            Log::info('Bitrix OAuth token exchange response', [
+                'connection_id' => $connection->id,
+                'response_keys' => array_keys($data ?? []),
+                'response_data' => collect($data)->except(['access_token', 'refresh_token'])->toArray(),
+            ]);
+
+            if (empty($data['access_token'])) {
+                Log::error('Bitrix OAuth token exchange: no access_token in response', [
+                    'connection_id' => $connection->id,
+                    'response' => $data,
+                ]);
+                return false;
+            }
+
             $connection->update([
                 'access_token' => $data['access_token'],
-                'refresh_token' => $data['refresh_token'],
+                'refresh_token' => $data['refresh_token'] ?? null,
                 'token_expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
             ]);
 
@@ -82,7 +96,7 @@ class BitrixOAuthService
         }
 
         try {
-            $response = Http::timeout(10)->post("{$domain}/oauth/token/", [
+            $response = Http::timeout(10)->get('https://oauth.bitrix.info/oauth/token/', [
                 'grant_type' => 'refresh_token',
                 'client_id' => $connection->client_id,
                 'client_secret' => $connection->client_secret,

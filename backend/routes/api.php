@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 // Public routes
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::get('/bitrix/oauth/callback', [BitrixOAuthController::class, 'callback']);
+Route::get('/bitrix/oauth/initiate/{connection}', [BitrixOAuthController::class, 'initiate']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -27,9 +28,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{connection}/test', [BitrixConnectionController::class, 'test']);
         Route::get('/{connection}/status', [BitrixConnectionController::class, 'status']);
     });
-
-    // Bitrix OAuth
-    Route::get('/bitrix/oauth/initiate/{connection}', [BitrixOAuthController::class, 'initiate']);
 
     // AI Connections
     Route::prefix('ai-connections')->group(function () {

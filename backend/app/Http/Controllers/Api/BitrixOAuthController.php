@@ -20,7 +20,7 @@ class BitrixOAuthController extends Controller
 
     public function initiate(BitrixConnection $connection): RedirectResponse
     {
-        if ($connection->auth_type !== 'oauth') {
+        if (!$connection->isOAuth()) {
             abort(400, 'Connection is not configured for OAuth.');
         }
 
